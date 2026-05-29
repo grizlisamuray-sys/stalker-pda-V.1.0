@@ -1,8 +1,6 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbwBUyX3lDvEhtTo8bS59mC0r2Yesb5X7STXyO0yQMxI4QTaS9HV5NUh7DiDZDOnWHBu4A/exec'; // ← ваш URL
+const API_URL = 'https://script.google.com/macros/s/AKfycbwBUyX3lDvEhtTo8bS59mC0r2Yesb5X7STXyO0yQMxI4QTaS9HV5NUh7DiDZDOnWHBu4A/exec'; // ваш URL
 let PLAYER_CODE = localStorage.getItem('playerCode') || '';
 const app = document.getElementById('app');
-
-// Глобальная переменная для профиля (обязательно!)
 let myProfile = null;
 
 if (!PLAYER_CODE) {
@@ -27,10 +25,31 @@ function saveCode() {
   }
 }
 
+// Вспомогательные функции (должны быть объявлены ДО initApp)
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
+function updateTime() {
+  const el = document.getElementById('time');
+  if (el) el.textContent = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+}
+
+async function fetchData(sheetName) {
+  try {
+    const resp = await fetch(`${API_URL}?sheet=${sheetName}&code=${PLAYER_CODE}`);
+    return await resp.json();
+  } catch (err) {
+    return JSON.parse(localStorage.getItem(`cache_${sheetName}`) || '[]');
+  }
+}
+
 async function initApp() {
   const isMaster = (PLAYER_CODE === 'MASTER');
 
-  // Загружаем профиль до рендеринга
+  // Загружаем профиль (если не мастер)
   if (!isMaster) {
     try {
       const profiles = await fetchData('Профили');
@@ -40,7 +59,7 @@ async function initApp() {
     }
   }
 
-  // Теперь myProfile точно объявлен и может использоваться в шаблоне
+  // Строим интерфейс
   app.innerHTML = `
     <div id="profileModal" class="modal" style="display:none">
       <div class="modal-content">
@@ -118,12 +137,182 @@ async function initApp() {
       </section>` : ''}
     </main>`;
 
-  setInterval(updateTime, 1000); updateTime();
-  loadTasks(); loadRumors(); loadChat(); loadWiki(); loadInventory();
+  // Запуск часов и загрузка данных
+  setInterval(updateTime, 1000);
+  updateTime();
+  loadTasks();
+  loadRumors();
+  loadChat();
+  loadWiki();
+  loadInventory();
   loadReputation();
   if (isMaster) populatePlayerSelects();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 }
 
-// --- Остальные функции (переключение, fetch, загрузка и т.д.) – оставьте без изменений ---
-// ... весь остальной код из предыдущего комплекта (switchTab, fetchData, loadTasks, loadRumors, loadChat, sendMessage, loadWiki, loadInventory, loadReputation, changeReputation, showProfileModal, closeModal, мастер-функции)
+// --- Загрузчики контента ---
+async function loadTasks() {
+  const data = await fetchData('Квесты');
+  const list = document.getElementById('task-list'); if(!list) return;
+  list.innerHTML = data.map(t => `<li><strong>${t[1]||''}</strong><br>${t[5]||''}</li>`).join('');
+  localStorage.setItem('cache_Квесты', JSON.stringify(data));
+}
+
+async function loadRumors() {
+  const data = await fetchData('Слухи и события');
+  const list = document.getElementById('rumor-list'); if(!list) return;
+  list.innerHTML = data.map(r => `<li>${r[2]||''}</li>`).join('');
+  localStorage.setItem('cache_Слухи и события', JSON.stringify(data));
+}
+
+async function loadChat() {
+  const data = await fetchData('Чат');
+  const list = document.getElementById('chat-list'); if(!list) return;
+  list.innerHTML = data.map(m => {
+    const senderCode = m[3] || '';
+    return `<li><small>${m[0]||''} <b><a href="javascript:void(0)" onclick="showProfileModal('${senderCode}')">${m[1]||''}</a></b></small>: ${m[2]||''}</li>`;
+  }).join('');
+  list.scrollTop = list.scrollHeight;
+  localStorage.setItem('cache_Чат', JSON.stringify(data));
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput'); const text = input.value.trim(); if(!text) return;
+  input.value = '';
+  await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'addChat', code:PLAYER_CODE, message:text }) });
+  loadChat();
+}
+
+async function loadWiki() {
+  const data = await fetchData('Энциклопедия');
+  const list = document.getElementById('wiki-list'); if(!list) return;
+  list.innerHTML = data.map(e => `<li><strong>${e[0]||''}</strong><br>${e[1]||''}</li>`).join('');
+  localStorage.setItem('cache_Энциклопедия', JSON.stringify(data));
+}
+
+async function loadInventory() {
+  const data = await fetchData('Инвентарь');
+  const list = document.getElementById('inventory-list'); if(!list) return;
+  list.innerHTML = data.map(i => `<li>${i[1]||''} (${i[2]||0})</li>`).join('');
+  localStorage.setItem('cache_Инвентарь', JSON.stringify(data));
+}
+
+// --- Репутация ---
+async function loadReputation() {
+  const personal = await fetchData('Репутация');
+  const personalList = document.getElementById('personal-rep-list');
+  const controls = document.getElementById('rep-controls');
+  if (personalList) {
+    let total = 0;
+    personalList.innerHTML = personal.map(r => {
+      total += r.value;
+      return `<li><a href="javascript:void(0)" onclick="showProfileModal('${r.fromCode}')">${r.fromName}</a>: ${r.value>0?'+'+r.value:r.value}</li>`;
+    }).join('');
+    personalList.innerHTML += `<li><strong>Общий баланс: ${total>0?'+'+total:total}</strong></li>`;
+  }
+  if (controls) {
+    controls.innerHTML = `
+      <select id="repTarget"><option value="">Выберите сталкера</option></select>
+      <input id="repReasonInput" placeholder="Причина">
+      <button onclick="changeReputation(1)">+ Доверие</button>
+      <button onclick="changeReputation(-1)">− Недоверие</button>
+    `;
+    try {
+      const playersResp = await fetch(`${API_URL}?sheet=Игроки&code=`);
+      const players = await playersResp.json();
+      const select = document.getElementById('repTarget');
+      players.forEach(p => { if(p[0] !== PLAYER_CODE) { const opt = document.createElement('option'); opt.value = p[0]; opt.textContent = p[1]; select.appendChild(opt); } });
+    } catch(e) {}
+  }
+  const faction = await fetchData('ФракционнаяРепутация');
+  const factionList = document.getElementById('faction-rep-list');
+  if (factionList) {
+    factionList.innerHTML = faction.map(f => {
+      const rep = f.reputation || 0;
+      let color = rep >= 500 ? '#33ff33' : rep <= -500 ? '#ff3333' : '#ffaa00';
+      return `<li style="color:${color}">${f.faction}: ${rep>0?'+'+rep:rep}</li>`;
+    }).join('');
+    if (faction.length === 0) factionList.innerHTML = '<li>Нет данных</li>';
+  }
+}
+
+async function changeReputation(amount) {
+  const target = document.getElementById('repTarget').value;
+  const reason = document.getElementById('repReasonInput').value.trim();
+  if (!target) return;
+  await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'updateReputation', fromCode:PLAYER_CODE, toCode:target, amount, reason }) });
+  loadReputation();
+}
+
+// --- Профиль ---
+async function showProfileModal(code) {
+  if (!code) return;
+  const profiles = await fetchData('Профили');
+  const profile = profiles.find(p => p.code === code);
+  if (!profile) return;
+  document.getElementById('modalPhoto').src = profile.photo || 'assets/icons/icon-192.png';
+  document.getElementById('modalName').textContent = profile.pozivnoy + (profile.fio ? ' (' + profile.fio + ')' : '');
+  document.getElementById('modalInfo').textContent = profile.info || 'Информация отсутствует';
+  document.getElementById('profileModal').style.display = 'block';
+}
+
+function closeModal() {
+  document.getElementById('profileModal').style.display = 'none';
+}
+window.onclick = function(event) {
+  if (event.target == document.getElementById('profileModal')) closeModal();
+}
+
+// --- Мастерские функции ---
+async function populatePlayerSelects() {
+  const playersResp = await fetch(`${API_URL}?sheet=Игроки&code=`);
+  const players = await playersResp.json();
+  const selects = ['questTarget', 'repPlayerSelect', 'rumorTarget'];
+  selects.forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    players.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p[0];
+      opt.textContent = p[1] + ' (' + p[2] + ')';
+      select.appendChild(opt);
+    });
+  });
+}
+
+async function announceEmission() {
+  const msg = document.getElementById('emissionMessage').value || 'Внимание! Выброс!';
+  await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'announceEmission', code:'MASTER', message:msg }) });
+  alert('Выброс объявлен!');
+}
+
+async function createQuest() {
+  const title = document.getElementById('questTitle').value;
+  const desc = document.getElementById('questDesc').value;
+  const reward = document.getElementById('questReward').value;
+  const target = document.getElementById('questTarget').value;
+  if (!title) return alert('Введите название');
+  await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'createQuest', code:'MASTER', title, description:desc, reward, targetCode:target }) });
+  alert('Задание создано!');
+  document.getElementById('questTitle').value = ''; document.getElementById('questDesc').value = ''; document.getElementById('questReward').value = '';
+}
+
+async function updateFactionRep() {
+  const player = document.getElementById('repPlayerSelect').value;
+  const faction = document.getElementById('factionSelect').value;
+  const amount = parseInt(document.getElementById('repAmount').value) || 0;
+  const reason = document.getElementById('repReason').value;
+  if (!player || !faction || amount === 0) return alert('Заполните все поля');
+  await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'updateFactionRep', code:'MASTER', playerCode:player, faction, amount, reason }) });
+  alert('Репутация изменена!');
+  loadReputation();
+}
+
+async function sendRumor() {
+  const text = document.getElementById('rumorText').value;
+  const target = document.getElementById('rumorTarget').value;
+  if (!text) return alert('Введите текст слуха');
+  await fetch(API_URL, { method:'POST', body: JSON.stringify({ action:'sendRumor', code:'MASTER', text, targetCode:target }) });
+  alert('Слух отправлен!');
+  document.getElementById('rumorText').value = '';
+}
