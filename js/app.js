@@ -117,7 +117,7 @@ async function initApp() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 }
 
-// Базовые функции
+// --- Базовые функции ---
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -174,7 +174,7 @@ async function loadInventory() {
   localStorage.setItem('cache_Инвентарь', JSON.stringify(data));
 }
 
-// Репутация
+// --- Репутация ---
 async function loadReputation() {
   const personal = await fetchData('Репутация');
   const personalList = document.getElementById('personal-rep-list');
@@ -220,7 +220,7 @@ async function changeReputation(amount) {
   loadReputation();
 }
 
-// Профиль
+// --- Профиль ---
 async function showProfileModal(code) {
   if (!code) return;
   const profiles = await fetchData('Профили');
@@ -238,7 +238,7 @@ window.onclick = function(event) {
   if (event.target == document.getElementById('profileModal')) closeModal();
 }
 
-// Мастерские функции
+// --- Мастерские функции ---
 async function populatePlayerSelects() {
   const playersResp = await fetch(`${API_URL}?sheet=Игроки&code=`);
   const players = await playersResp.json();
