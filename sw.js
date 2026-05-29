@@ -1,10 +1,10 @@
-const CACHE_NAME = 'stalker-pda-v1';
+const CACHE_NAME = 'stalker-pda-v2';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/assets/css/style.css',
-  '/js/app.js',
-  '/manifest.json'
+  '/stalker-pda-V.1.0/',
+  '/stalker-pda-V.1.0/index.html',
+  '/stalker-pda-V.1.0/assets/css/style.css',
+  '/stalker-pda-V.1.0/js/app.js',
+  '/stalker-pda-V.1.0/manifest.json'
 ];
 
 self.addEventListener('install', event => {
