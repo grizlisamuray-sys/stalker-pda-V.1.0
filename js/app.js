@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbzDOIXv5wlI1OH0rTK7MKSDlPWECSjBQrThoZVqNYog3bi4cD_E5uDXVrA6z-fzGCXYNQ/exec'; // ← замените на свой
+const API_URL = 'https://script.google.com/macros/s/AKfycbwBUyX3lDvEhtTo8bS59mC0r2Yesb5X7STXyO0yQMxI4QTaS9HV5NUh7DiDZDOnWHBu4A/exec'; // ← замените на свой
 let PLAYER_CODE = localStorage.getItem('playerCode') || '';
 const app = document.getElementById('app');
 
